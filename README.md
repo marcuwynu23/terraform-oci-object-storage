@@ -1,10 +1,11 @@
-# terraform-oraclecloud-objectstorage
+# terraform-oci-object-storage
 
 This Terraform project provisions an Oracle Cloud Infrastructure (OCI) Object Storage bucket.
 
 ## Architecture
 
 ### Flowchart
+
 ```mermaid
 graph TD
     A[User] -->|terraform apply| B(Terraform)
@@ -14,6 +15,7 @@ graph TD
 ```
 
 ### Sequence Diagram
+
 ```mermaid
 sequenceDiagram
     participant U as User
@@ -32,6 +34,7 @@ sequenceDiagram
 ```
 
 ## Bucket Specifications
+
 - **Storage Tier**: `Standard` (covered by the Always Free allowance). This property is immutable after creation.
 - **Access Type**: `NoPublicAccess` — the bucket is private and reachable only by authenticated callers.
 - **Namespace**: Looked up with the `oci_objectstorage_namespace` data source rather than passed in, so there is no namespace string to copy from the console.
@@ -39,7 +42,9 @@ sequenceDiagram
 - **Provisioning Only**: This project creates the bucket resource only; no files or objects are uploaded.
 
 ## OCI Always Free Limits
+
 To stay within the free tier, ensure your usage does not exceed:
+
 - **Storage**: 20 GB total across the Standard, Infrequent Access and Archive tiers.
 - **API Requests**: 50,000 Object Storage API requests per month.
 - **Data Transfer**: 10 TB of outbound data transfer per month.
@@ -47,6 +52,7 @@ To stay within the free tier, ensure your usage does not exceed:
 > Always Free resources should be created in your tenancy's **home region**. Creating the bucket elsewhere can consume paid capacity.
 
 ## Prerequisites
+
 1.  **OCI CLI**: [Installed](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm) and configured.
 2.  **Terraform**: `>= 1.6.4` — [installed](https://developer.hashicorp.com/terraform/downloads). The version floor comes from `skip_s3_checksum`, used by the remote state backend.
 
@@ -54,14 +60,17 @@ To stay within the free tier, ensure your usage does not exceed:
 
 1.  **Authenticate**:
     Instead of committing credentials, this project reads them from your local OCI config file — the same way the GCP project uses your local `gcloud` credentials.
+
     ```bash
     # Writes ~/.oci/config and generates an API signing key
     oci setup config
     ```
+
     When prompted, paste your tenancy OCID, your user OCID, and your home region. Then upload the generated public key: Console → My profile → API keys → Add API key → Paste public key.
 
 2.  **Configure Variables**:
     Create a `terraform.tfvars` file based on the example:
+
     ```hcl
     compartment_id = "ocid1.compartment.oc1..aaaa..."
     oci_region     = "us-ashburn-1"
@@ -69,6 +78,7 @@ To stay within the free tier, ensure your usage does not exceed:
     ```
 
 3.  **Deploy**:
+
     ```bash
     # Initialize (downloads the oci and random providers).
     # -backend=false keeps state local. To use the Object Storage remote
@@ -84,21 +94,21 @@ To stay within the free tier, ensure your usage does not exceed:
 
 ## Variables
 
-| Variable | Description | Type | Default |
-|----------|-------------|------|---------|
-| `compartment_id` | OCID of the compartment to create the bucket in | `string` | (required) |
-| `region` | OCI region (e.g. `us-ashburn-1`) | `string` | `"us-ashburn-1"` |
-| `bucket_name` | Base bucket name (random suffix appended) | `string` | (required) |
-| `oci_config_profile` | Profile name in `~/.oci/config` | `string` | `"DEFAULT"` |
+| Variable             | Description                                     | Type     | Default          |
+| -------------------- | ----------------------------------------------- | -------- | ---------------- |
+| `compartment_id`     | OCID of the compartment to create the bucket in | `string` | (required)       |
+| `region`             | OCI region (e.g. `us-ashburn-1`)                | `string` | `"us-ashburn-1"` |
+| `bucket_name`        | Base bucket name (random suffix appended)       | `string` | (required)       |
+| `oci_config_profile` | Profile name in `~/.oci/config`                 | `string` | `"DEFAULT"`      |
 
 ## Outputs
 
-| Output | Description |
-|--------|-------------|
-| `bucket_name` | Name of the created bucket |
+| Output             | Description                                  |
+| ------------------ | -------------------------------------------- |
+| `bucket_name`      | Name of the created bucket                   |
 | `bucket_namespace` | Object Storage namespace the bucket lives in |
-| `bucket_url` | Base URL of the bucket |
-| `bucket_id` | OCID of the created bucket |
+| `bucket_url`       | Base URL of the bucket                       |
+| `bucket_id`        | OCID of the created bucket                   |
 
 ## Resources Created
 
@@ -109,27 +119,28 @@ To stay within the free tier, ensure your usage does not exceed:
 ## CI/CD Setup (GitHub Actions)
 
 ### Prerequisites
+
 1. **Create an Object Storage bucket** for Terraform remote state, plus a **Customer Secret Key** (Console → My profile → Customer secret keys) so the S3-compatible API can reach it. See [Remote State](#remote-state-object-storage) below.
 
 2. **Generate an API signing key** in the OCI Console (My profile → API keys → Add API key → Generate API key pair). Download the private key — you will not be able to retrieve it again.
 
 3. **Add GitHub secrets**:
 
-    | Secret Name | Value |
-    |---|---|
-    | `OCI_TENANCY_OCID` | Your tenancy OCID |
-    | `OCI_USER_OCID` | Your user OCID |
-    | `OCI_FINGERPRINT` | Key fingerprint shown after adding the API key |
-    | `OCI_PRIVATE_KEY` | Full contents of the downloaded private key file |
-    | `OCI_NAMESPACE` | Object Storage namespace (`oci os ns get`) |
-    | `OCI_S3_ACCESS_KEY` | Customer Secret Key access key |
-    | `OCI_S3_SECRET_KEY` | Customer Secret Key secret |
-    | `TF_BUCKET_NAME` | Your state bucket name |
-    | `TF_BUCKET_PREFIX` | State path prefix (e.g., `terraform-oraclecloud-objectstorage`) |
+   | Secret Name         | Value                                                           |
+   | ------------------- | --------------------------------------------------------------- |
+   | `OCI_TENANCY_OCID`  | Your tenancy OCID                                               |
+   | `OCI_USER_OCID`     | Your user OCID                                                  |
+   | `OCI_FINGERPRINT`   | Key fingerprint shown after adding the API key                  |
+   | `OCI_PRIVATE_KEY`   | Full contents of the downloaded private key file                |
+   | `OCI_NAMESPACE`     | Object Storage namespace (`oci os ns get`)                      |
+   | `OCI_S3_ACCESS_KEY` | Customer Secret Key access key                                  |
+   | `OCI_S3_SECRET_KEY` | Customer Secret Key secret                                      |
+   | `TF_BUCKET_NAME`    | Your state bucket name                                          |
+   | `TF_BUCKET_PREFIX`  | State path prefix (e.g., `terraform-oraclecloud-objectstorage`) |
 
 4. **Run the workflow**:
-    - **Apply**: Go to Actions → **CD - OCI Object Storage (Apply)** → fill in all inputs
-    - **Destroy**: Go to Actions → **CD - OCI Object Storage (Destroy)** → fill in all inputs
+   - **Apply**: Go to Actions → **CD - OCI Object Storage (Apply)** → fill in all inputs
+   - **Destroy**: Go to Actions → **CD - OCI Object Storage (Destroy)** → fill in all inputs
 
 > The workflows write `~/.oci/config` and a `backend.tfvars` from these secrets at runtime. Nothing is committed.
 
