@@ -1,0 +1,118 @@
+name: CD - OCI Object Storage (Apply)
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      compartment_id:
+        description: OCI compartment OCID
+        required: true
+        type: string
+
+      region:
+        description: "OCI region (use your tenancy's home region for Always Free)"
+        required: true
+        type: string
+        default: us-ashburn-1
+
+      bucket_name:
+        description: bucket name
+        required: true
+        type: string
+
+env:
+  TF_BUCKET_NAME: ${{ secrets.TF_BUCKET_NAME }}
+  TF_BUCKET_PREFIX: ${{ secrets.TF_BUCKET_PREFIX }}
+  # providers.tf defaults oci_auth to SecurityToken, which needs an interactive
+  # `oci session authenticate` browser flow. A runner cannot do that, so CI
+  # authenticates with the API signing key instead.
+  TF_VAR_oci_auth: APIKey
+  # The s3 backend talks to Object Storage's S3-compatible API, which
+  # authenticates with a Customer Secret Key rather than the API signing key.
+  AWS_ACCESS_KEY_ID: ${{ secrets.OCI_S3_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_S3_SECRET_KEY }}
+
+jobs:
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: latest
+
+    - name: Configure OCI Credentials
+      # Written to a file because the API signing key is multi-line. Passed
+      # through the environment rather than interpolated, so nothing in the key
+      # is re-parsed by the shell.
+      env:
+        OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+      run: |
+        mkdir -p "$HOME/.oci"
+        printf '%s\n' "$OCI_PRIVATE_KEY" > "$HOME/.oci/oci_api_key.pem"
+        chmod 600 "$HOME/.oci/oci_api_key.pem"
+        cat > "$HOME/.oci/config" <<EOF
+        [DEFAULT]
+        user=${{ secrets.OCI_USER_OCID }}
+        fingerprint=${{ secrets.OCI_FINGERPRINT }}
+        tenancy=${{ secrets.OCI_TENANCY_OCID }}
+        region=${{ github.event.inputs.region }}
+        key_file=$HOME/.oci/oci_api_key.pem
+        EOF
+        chmod 600 "$HOME/.oci/config"
+
+    - name: Write Backend Config
+      # providers.tf ships with its `backend "s3"` block commented out so that a
+      # plain `terraform init` works locally. CI still needs remote state —
+      # without it, state dies with the runner and every apply would leak a new
+      # bucket. So add the block here, but only when providers.tf does not
+      # already define one, to avoid a duplicate-backend error if it is ever
+      # uncommented.
+      run: |
+        if grep -qE '^[[:space:]]*backend[[:space:]]+"s3"' providers.tf; then
+          echo "providers.tf already defines the s3 backend; not generating one."
+        else
+          cat > backend.ci.tf <<'EOF'
+        terraform {
+          backend "s3" {
+            skip_region_validation      = true
+            skip_credentials_validation = true
+            skip_requesting_account_id  = true
+            skip_metadata_api_check     = true
+            use_path_style              = true
+            skip_s3_checksum            = true
+          }
+        }
+        EOF
+          echo "Generated backend.ci.tf for CI remote state."
+        fi
+
+        cat > backend.tfvars <<EOF
+        bucket = "$TF_BUCKET_NAME"
+        key    = "$TF_BUCKET_PREFIX/terraform.tfstate"
+        region = "${{ github.event.inputs.region }}"
+        endpoints = {
+          s3 = "https://${{ secrets.OCI_NAMESPACE }}.compat.objectstorage.${{ github.event.inputs.region }}.oraclecloud.com"
+        }
+        EOF
+
+    - name: Terraform Init
+      run: terraform init -backend-config="backend.tfvars"
+
+    - name: Terraform Plan
+      run: |
+        terraform plan \
+          -var="compartment_id=${{ github.event.inputs.compartment_id }}" \
+          -var="oci_region=${{ github.event.inputs.region }}" \
+          -var="bucket_name=${{ github.event.inputs.bucket_name }}"
+
+    - name: Terraform Apply
+      run: |
+        terraform apply -auto-approve \
+          -var="compartment_id=${{ github.event.inputs.compartment_id }}" \
+          -var="oci_region=${{ github.event.inputs.region }}" \
+          -var="bucket_name=${{ github.event.inputs.bucket_name }}"
