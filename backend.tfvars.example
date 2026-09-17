@@ -1,0 +1,22 @@
+# OCI Object Storage remote state, used with:
+#   terraform init -backend-config="backend.tfvars"
+#
+# Create the state bucket first (it must exist before init):
+#   oci os bucket create --name "[username]-terraform-state-bucket" \
+#     --compartment-id "<compartment-ocid>" --storage-tier Standard
+#
+# The S3-compatible API is authenticated with a Customer Secret Key
+# (Console -> User Settings -> Customer Secret Keys), NOT your API signing key.
+# Supply it through the standard AWS variables so it stays out of this file:
+#   export AWS_ACCESS_KEY_ID="<customer-secret-key-id>"
+#   export AWS_SECRET_ACCESS_KEY="<customer-secret-key>"
+#
+# Find your namespace with: oci os ns get
+
+bucket = "[username]-terraform-state-bucket"
+key    = "terraform-oraclecloud-objectstorage/terraform.tfstate"
+region = "us-ashburn-1"
+
+endpoints = {
+  s3 = "https://[namespace].compat.objectstorage.us-ashburn-1.oraclecloud.com"
+}

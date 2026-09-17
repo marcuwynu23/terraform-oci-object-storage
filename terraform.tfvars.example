@@ -1,0 +1,6 @@
+compartment_id = "ocid1.compartment.oc1..aaaaaaaexampleexampleexampleexampleexampleexample"
+oci_region         = "us-ashburn-1" # Use your tenancy's home region for Always Free.
+bucket_name    = "simple-free-tier-bucket-storage"
+
+# Optional: only set this if your credentials live in a non-default profile.
+# oci_config_profile = "DEFAULT"
